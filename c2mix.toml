@@ -1,0 +1,26 @@
+[toolchain]
+clang    = "clang-18"
+opt      = "opt-18"
+llvm_as  = "llvm-as-18"
+llvm_diff = "llvm-diff-18"
+llvm_link = "llvm-link-18"
+
+[solver.mix]
+bin    = "../extend_z3/bin/main"      # extend_z3 是外部依賴，路徑可設定（相對於本檔所在目錄）
+memory = "15G"                        # 與 extend_z3/shs/run.sh 相同，用 systemd-run 限制
+common = ["--minimal-fixed-watch", "--enable-eqmod-true-lemmas",
+          "--enable-gb-preprocess", "--enable-ideal-rewrite"]
+omit_extra = ["--enable-eq-gb-partition-prepass",
+              "--eq-gb-partition-prepass-workers", "12"]   # 同 extend_z3/shs/regression_76.sh
+# c2mix 自己的輸出預設加上 omit_extra：實測它是 T2b 能不能證出來的關鍵（F10）
+prepass_default = true
+
+[solver.range]
+bin = "z3"
+timeout_s = 600
+
+[golden]
+root = "../extend_z3/input"           # 只讀這兩個子目錄
+sets = ["pqclean_kyber768_avx2_noAssume", "openssl/ecp_nistz256/x86_64"]
+# 每個 golden set 跑 bin/main 時是否加 omit_extra（regression_76 的分組）
+prepass = ["pqclean_kyber768_avx2_noAssume"]

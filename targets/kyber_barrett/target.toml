@@ -1,0 +1,16 @@
+[source]
+url    = "https://github.com/pq-crystals/kyber"
+commit = "3edd5af5991927164edd4aacebfcbee00b8064e7"
+vendor = "kyber"
+files  = ["reduce.c"]
+entry  = "barrett_reduce"
+
+[build]
+mode = "include"
+
+[limits]
+max_steps = 1000000
+
+[expect]
+must_pass  = true
+hints_omit = "record"

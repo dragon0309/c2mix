@@ -1,0 +1,16 @@
+[source]
+url    = "extend_z3/working/cbmc_small/01_add_comm.c"
+commit = "extend_z3 @ 56bd0cb (transcribed, see vendor/cbmc_small/README.md)"
+vendor = "cbmc_small"
+files  = ["01_add_comm.c"]
+entry  = "add_comm"
+
+[build]
+mode = "include"
+
+[limits]
+max_steps = 100000
+
+[expect]
+must_pass  = true
+hints_omit = "record"

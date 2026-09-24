@@ -1,0 +1,25 @@
+[source]
+url    = "https://github.com/mit-plv/fiat-crypto"
+commit = "ceb058375cee096f7c16d3415a9ae6dc1886073f"
+vendor = "fiat"
+files  = ["p256_64.c"]
+entry  = "fiat_p256_subborrowx_u64"
+
+[build]
+mode    = "include"
+# FIAT_P256_NO_ASM turns fiat_p256_value_barrier_u64 into the identity macro; without
+# it the source uses an `asm` statement, which is outside the IR subset (§5.4). This
+# is source text in the generated harness, not a compiler flag: §5.3's flags are fixed.
+defines = ["FIAT_P256_NO_ASM 1"]
+
+[limits]
+max_steps = 1000000
+
+[expect]
+must_pass  = true
+hints_omit = "record"
+# 64-bit subtract with borrow; exercises the i128 signed narrowing.
+# Equivalent mutation (§8.1): `x1 >> 64` -> `x1 >> 65`. With arg1 in {0, 1} the
+# difference lies in [-2^64, 2^64), where both shifts give -1 for a negative value and
+# 0 otherwise. A3.6 establishes this by comparing the two traces on the same
+# pre-condition-satisfying inputs.

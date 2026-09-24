@@ -1,0 +1,19 @@
+[source]
+url    = "https://github.com/pq-crystals/kyber"
+commit = "3edd5af5991927164edd4aacebfcbee00b8064e7"
+vendor = "kyber"
+files  = ["ntt.c", "reduce.c"]
+entry  = "fqmul"
+
+[build]
+mode = "include"
+# fqmul is static in ntt.c, so the harness has to be in the same translation unit
+# (§4.1). ntt.c also defines invntt and basemul; they are never called, and no
+# specification for them exists before phase 5 (the held-out set).
+
+[limits]
+max_steps = 1000000
+
+[expect]
+must_pass  = true
+hints_omit = "record"

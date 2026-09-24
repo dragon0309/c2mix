@@ -1,0 +1,20 @@
+[source]
+url    = "extend_z3/working/cbmc_small/04_loop_mul.c"
+commit = "extend_z3 @ 56bd0cb (transcribed, see vendor/cbmc_small/README.md)"
+vendor = "cbmc_small"
+files  = ["04_loop_mul.c"]
+entry  = "loop_mul"
+
+[build]
+mode = "include"
+
+[limits]
+max_steps = 100000
+
+[expect]
+must_pass  = true
+hints_omit = "record"
+# The inner `if` depends on the input, so this target is also A3.9's merge case.
+# Equivalent mutation (§8.1): `i < 4` -> `i < 5`. The fifth iteration reads bit 4 of k,
+# which the pre-condition keeps below 16, so it adds zero. A3.6 establishes this by
+# running both traces on the same pre-condition-satisfying inputs.

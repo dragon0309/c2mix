@@ -1,0 +1,117 @@
+{
+  "profile": "consumer",
+  "files": {
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_from_mont_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_mul_by_3_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_mul_mont_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_mul_mont_1.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_neg_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_sqr_mont_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_sub_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_sub_v2_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "openssl/ecp_nistz256/x86_64/ecp_nistz256_to_mont_0.smt2": {
+      "W-DECL-ORDER": 1,
+      "W-LAYOUT": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut0.smt2": {
+      "W-BV2INT": 1026,
+      "W-DECL-ORDER": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut1.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut10.smt2": {
+      "W-BV2INT": 518,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut11.smt2": {
+      "W-BV2INT": 522,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut12.smt2": {
+      "W-BV2INT": 530,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut13.smt2": {
+      "W-BV2INT": 546,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut14.smt2": {
+      "W-BV2INT": 65,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1,
+      "W-TRIVIAL-GOAL": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut2.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut3.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut4.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut5.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut6.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut7.smt2": {
+      "W-BV2INT": 3,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1,
+      "W-TRIVIAL-GOAL": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut8.smt2": {
+      "W-BV2INT": 514,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    },
+    "pqclean_kyber768_avx2_noAssume/cut9.smt2": {
+      "W-BV2INT": 516,
+      "W-DECL-ORDER": 1,
+      "W-INDET-BV": 1
+    }
+  }
+}

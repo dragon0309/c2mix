@@ -1,0 +1,18 @@
+[source]
+url    = "written for c2mix (A3.9)"
+commit = "n/a"
+vendor = "merge"
+files  = ["cmov_branch.c"]
+entry  = "cmov_branch"
+
+[build]
+mode = "include"
+
+[limits]
+max_steps = 100000
+
+[expect]
+must_pass  = true
+hints_omit = "record"
+# A3.9: the same selection written with `if`/`else` and with `?:`, so the executor has
+# to merge twice. The manifest's merge statistics are checked against the trace.
