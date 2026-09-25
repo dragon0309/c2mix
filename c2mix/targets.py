@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import inspect
 import re
 import shutil
 import sys
@@ -63,6 +64,17 @@ class Target:
                                                    execute.MAX_MERGE_DEPTH))
 
     @property
+    def range_split(self) -> int:
+        """How many files each range VC is split into (§7.4); `--range-split` overrides.
+        A target with wide segments sets it, the way it chooses its cut granularity."""
+        return int(self.data.get("build", {}).get("range_split", 1))
+
+    @property
+    def phase(self) -> int:
+        """The phase whose acceptance run owns this target (§9.0); 3 when unstated."""
+        return int(self.data.get("expect", {}).get("phase", 3))
+
+    @property
     def must_pass(self) -> bool:
         return bool(self.data.get("expect", {}).get("must_pass", True))
 
@@ -79,11 +91,17 @@ class Target:
         p = self.path / "cuts.patch"
         return p if p.exists() and p.read_text().strip() else None
 
-    def spec(self) -> dsl.Target:
+    def spec(self, variant: str | None = None) -> dsl.Target:
+        """The specification module's Target. A variant moves the cuts, so the cut
+        assertions move with it: `build` receives the variant name when it takes one."""
         if str(self.root) not in sys.path:
             sys.path.insert(0, str(self.root))
         mod = importlib.import_module(f"targets.{self.name}.spec")
         importlib.reload(mod)
+        if "variant" in inspect.signature(mod.build).parameters:
+            return mod.build(variant=variant)
+        if variant:
+            raise TargetError(f"{self.name}: spec.build() does not take a variant")
         return mod.build()
 
 
@@ -97,11 +115,14 @@ def load(name: str, root: Path | None = None) -> Target:
         return Target(name, path, tomllib.load(fh), root)
 
 
-def names(root: Path | None = None) -> list[str]:
+def names(root: Path | None = None, phase: int | None = None) -> list[str]:
     root = root or ROOT
     d = root / "targets"
-    return sorted(p.name for p in d.iterdir()
-                  if (p / "target.toml").exists()) if d.exists() else []
+    out = sorted(p.name for p in d.iterdir()
+                 if (p / "target.toml").exists()) if d.exists() else []
+    if phase is not None:
+        out = [n for n in out if load(n, root).phase == phase]
+    return out
 
 
 # ------------------------------------------------------------------- patching
@@ -191,7 +212,7 @@ def prepare(t: Target, work: Path, variant: str | None = None,
     for name, text in (mutate or {}).items():
         (src_dir / name).write_text(text)
 
-    spec = t.spec()
+    spec = t.spec(variant)
     objs = harness.objects(spec, t.signed_override)
     names_ = [Path(f).name for f in t.files]
     text = harness.generate(

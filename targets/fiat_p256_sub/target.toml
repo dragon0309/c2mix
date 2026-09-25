@@ -1,0 +1,22 @@
+[source]
+url    = "https://github.com/mit-plv/fiat-crypto"
+commit = "ceb058375cee096f7c16d3415a9ae6dc1886073f"
+vendor = "fiat"
+files  = ["p256_64.c"]
+entry  = "fiat_p256_sub"
+
+[build]
+mode    = "include"
+# FIAT_P256_NO_ASM turns fiat_p256_value_barrier_u64 into the identity macro; without
+# it the source uses an `asm` statement, which is outside the IR subset (§5.4). This
+# is source text in the generated harness, not a compiler flag: §5.3's flags are fixed.
+defines = ["FIAT_P256_NO_ASM 1"]
+
+[limits]
+max_steps = 1000000
+
+[expect]
+phase      = 4
+must_pass  = false
+hints_omit = "record"
+# Not one of A4.3's must-pass targets: G6 is unsat or classified under R6.

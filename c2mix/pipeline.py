@@ -32,6 +32,9 @@ def build(trace: Trace, target: dsl.Target, out_dir: str | Path, name: str = "ta
           opts: Options | None = None, cfg=None, range_split: int = 1,
           spec_source: str | None = None, frontend: dict | None = None) -> Build:
     opts = opts or Options()
+    if range_split > 1 and not opts.range_slices:
+        from dataclasses import replace
+        opts = replace(opts, range_slices=True)
     failures = check_mod.check_spec(target, trace)
     if failures:
         raise SpecError("; ".join(str(f) for f in failures))

@@ -3,7 +3,7 @@
 C → SMT2（CryptoLine mix 格式）轉換器。規格見 [spec.md](spec.md)。
 
 目前進度：第 0 階段（格式層）、第 1 階段（IR 與雙模型 lowering）、第 2 階段（規格 DSL 與
-VC 組裝）、第 3 階段（LLVM 前端：解析器、執行器、13 個純量目標）。
+VC 組裝）、第 3 階段（LLVM 前端：解析器、執行器、14 個純量目標）。第 4 階段進行中（8 個目標、`make accept-4`；進度與待決問題見 spec §9 第 4 階段）。
 
 ```sh
 python3 -m c2mix build <target> [--hints=emit] [-o DIR]   # C 原始碼 → out/<target>/
@@ -17,6 +17,7 @@ make accept-0    # 第 0 階段驗收 → reports/accept-0-<date>.md（會跑 bi
 make accept-1    # 第 1 階段驗收 → reports/accept-1-<date>.md（約 10 分鐘）
 make accept-2    # 第 2 階段驗收 → reports/accept-2-<date>.md（約 2 分鐘）
 make accept-3    # 第 3 階段驗收 → reports/accept-3-<date>.md（約 15 分鐘）
+make accept-4    # 第 4 階段驗收 → reports/accept-4-<date>.md（數小時）
 make accept-all  # 四個階段都跑（§9 的回歸規則）
 make ab-0        # A0.4 編碼 A/B → reports/a0.4-<date>.md（約 10 分鐘）
 make fuzz        # 只跑 A1.3/A1.4 的隨機測試
@@ -38,7 +39,7 @@ make fuzz        # 只跑 A1.3/A1.4 的隨機測試
 | `vendor/` | 上游原始碼，commit 固定在 `target.toml` |
 | `include/`, `runtime/` | `c2mix.h` 與原生執行用的 runtime（G2） |
 | `c2mix/` | `cli`、`config`、`oracle`（呼叫 bin/main 與 z3） |
-| `tests/phase0/` … `tests/phase3/` | 各階段的單元測試、驗收腳本與實驗；`tests/phase3/reject`、`tests/phase3/robust` 是 A3.7、A3.8 的語料 |
+| `tests/phase0/` … `tests/phase4/` | 各階段的單元測試、驗收腳本與實驗；`tests/phase3/reject`、`tests/phase3/robust` 是 A3.7、A3.8 的語料 |
 | `docs/` | [lint-rules.md](docs/lint-rules.md)、[lemmas.md](docs/lemmas.md)、[vc.md](docs/vc.md) |
 
 需求：Python 3.12（只用標準函式庫）、clang/llvm 18、z3、extend_z3 的 `bin/main`

@@ -2,7 +2,7 @@ PY ?= python3
 GOLDEN_ROOT := ../extend_z3/input
 GOLDEN := $(GOLDEN_ROOT)/pqclean_kyber768_avx2_noAssume $(GOLDEN_ROOT)/openssl/ecp_nistz256/x86_64
 
-.PHONY: test accept-0 accept-1 accept-2 accept-3 accept-all ab-0 lemmas fuzz lint-golden baseline-0 negative-0 g10 clean
+.PHONY: test accept-0 accept-1 accept-2 accept-3 accept-4 accept-all ab-0 lemmas fuzz lint-golden baseline-0 negative-0 g10 clean
 
 test:                       ## unit tests (fast, no bin/main)
 	$(PY) -m unittest discover -s tests -t .
@@ -18,6 +18,9 @@ accept-2:                   ## phase 2 gates A2.1–A2.5 + G10 -> reports/accept
 
 accept-3:                   ## phase 3 gates A3.0–A3.9 + G10 -> reports/accept-3-<date>.md
 	$(PY) tests/phase3/accept.py
+
+accept-4:                   ## phase 4 gates A4.1–A4.6 + G10 -> reports/accept-4-<date>.md (hours)
+	$(PY) tests/phase4/accept.py
 
 accept-all: accept-0 accept-1 accept-2 accept-3   ## regression rule (§9): every completed phase
 
@@ -46,5 +49,5 @@ g10:
 	@! grep -riEn 'kyber|dilithium|saber|mceliece|p256|25519|3329|8380417' c2mix/ include/ runtime/ --exclude-dir=__pycache__
 
 clean:
-	rm -rf work/phase0 work/phase3 work/tmp work/build work/gate
+	rm -rf work/phase0 work/phase3 work/phase4 work/tmp work/build work/gate
 	find . -name __pycache__ -type d -exec rm -rf {} +

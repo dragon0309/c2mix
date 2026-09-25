@@ -1,16 +1,22 @@
 # c2mix：C → SMT2（CryptoLine mix 格式）轉換器規格
 
-- 文件狀態：草案 v0.4，2026-09-24（v0.1 用 CBMC 前端；v0.2 改為 LLVM 前端，見 D1；v0.3 為審查後的修正；
-  v0.4 為第 3 階段的實測結果：LF1–LF4 轉為已實測、§6.4 新增 H5/H6、§9 加上第 3 階段結論、新增 §10.3 工作規則）
+- 文件狀態：草案 v0.5，2026-09-24（v0.1 用 CBMC 前端；v0.2 改為 LLVM 前端，見 D1；v0.3 為審查後的修正；
+  v0.4 為第 3 階段的實測結果：LF1–LF4 轉為已實測、§6.4 新增 H5/H6、§9 加上第 3 階段結論、新增 §10.3 工作規則；
+  v0.5 為第 4 階段進行中的實測：§6.3 複製沿用 atom、§6.4 判定的實作、§7.4 range VC 拆分與 G5 的多查詢規則、
+  §4.1 新鍵、§9 第 4 階段進度與兩個待決問題）
 - 專案型態：獨立專案。輸出的消費端是 extend_z3 `bin/main`（`main` @ `56bd0cb`），視為外部依賴
 - 工具鏈基準：
-  - 主前端：clang / LLVM 18（Ubuntu 24.04 的 apt 預設版本；**尚未安裝，相關事實列為待實測，見 A3.0**）
+  - 主前端：clang / LLVM 18（Ubuntu 24.04 的 apt 預設版本；LF1–LF4 已於 A3.0 實測，見 §2.0）
   - oracle：Z3 4.8.12（CLI）、Python 3.12.3
   - 第二前端（選配，第 6 階段）：CBMC 6.11.0
 
 本文中 `extend_z3/…` 指 extend_z3 repo 裡的路徑。
 
 ## 0. 摘要
+
+**目的：產生給 extend_z3 跑的例子。** extend_z3 目前確認正確的輸入只有兩組 golden，都是 CryptoLine
+從組語產生的（§2.1）。c2mix 從 C 程式產生同格式的 VC，讓 extend_z3 有更多例子可以跑。所以
+c2mix 產生的 VC 若 extend_z3 解不出來，這本身也是關於 extend_z3 的結果，不只是轉換器的問題（R6）。
 
 c2mix 把「C 函式 + 規格」轉成 extend_z3 可以直接求解的驗證條件（VC）：每個 cut 一個
 五段式 `.smt2`，格式與 CryptoLine `cv -save-mix` 相同（例如
@@ -99,7 +105,7 @@ C 的整數語意和一組通用的代數編碼規則。
 | F8 | 已實測 | Ubuntu 24.04 的 apt 候選版本：`clang`/`llvm` 為 18，另有 `clang-19`、`clang-20`；`cbmc` 為 6.11.0 | 工具鏈可以用 apt 安裝並鎖版本 |
 | F4 | 已實測（CBMC） | CBMC 6.11 的行為：陣列要加 `--max-field-sensitivity-array-size 256` 才會展開成純量；元素名是大寫十六進位；常數表會被摺疊；`unsigned __int128` 可用（`fiat_p256_mul` 產生 168 處 `BitVec 128`、0 個 guard） | 只用於第二前端（第 6 階段）。細節見附錄 E |
 | LF1 | 已實測（2026-09-23） | clang 在 `-O0` 下會替函式加 `optnone`，之後 `opt` 的 pass 都不作用；加 `-Xclang -disable-O0-optnone` 才能跑 `mem2reg`。實測：不加旗標時 `mem2reg` 之後仍有 8 個 `alloca`，加了之後 0 個 | 前端旗標（§5.3） |
-| LF2 | 已實測（2026-09-23） | 加 `-fwrapv` 後，`-O0` 加 `mem2reg` 產生的 IR 不含任何會產生 poison 的旗標（`nsw`、`nuw`、`exact`、`nneg`、`disjoint` 等）。實測：同一支程式不加 `-fwrapv` 有 7 處，加了之後 0 處；第 3 階段 13 個目標的 IR 合計 0 處 | 執行器遇到這類旗標就拒絕（`E-POISON-FLAG`），不必模擬 poison 語意 |
+| LF2 | 已實測（2026-09-23） | 加 `-fwrapv` 後，`-O0` 加 `mem2reg` 產生的 IR 不含任何會產生 poison 的旗標（`nsw`、`nuw`、`exact`、`nneg`、`disjoint` 等）。實測：同一支程式不加 `-fwrapv` 有 7 處，加了之後 0 處；第 3 階段 14 個目標的 IR 合計 0 處 | 執行器遇到這類旗標就拒絕（`E-POISON-FLAG`），不必模擬 poison 語意 |
 | LF3 | 已實測（2026-09-23） | `const` 常數表的讀取是對 `@zetas` 這種 `constant` 全域的 GEP 加 load，索引在展開後是常數 | 執行器直接摺疊 |
 | LF4 | 已實測（2026-09-23） | `unsigned __int128` 對應到 `i128` 運算；fiat-crypto `p256_64.c` 的 IR 落在 §5.4 的支援子集內（用到的指令：add、alloca、and、call、load、lshr、ret、store、trunc、zext）。**前提**：要定義 `FIAT_P256_NO_ASM`，否則 `fiat_p256_value_barrier_u64` 是 `asm` 敘述，不在子集內；這個 `#define` 寫在產生的 harness 裡，不是編譯旗標（§5.3 的旗標仍然固定） | 多 limb 目標可行 |
 | LF5 | 待實測 | `_mm256_add_epi16` 會變成 `add <16 x i16>`，`_mm256_mulhi_epi16` 會變成 `@llvm.x86.avx2.pmulh.w` | 第 6 階段的 SIMD 支援 |
@@ -226,6 +232,7 @@ entry  = "ntt"
 [build]
 mode = "include"    # include：harness 直接 #include 上游 .c，可以呼叫 static 函式
                     # link：各檔分別編譯後以 llvm-link 連結
+range_split = 16    # 選用：range VC 預設拆成幾個檔（§7.4），--range-split 覆寫
 
 [variants]
 half = "cuts.half.patch"      # 選用：c2mix build --variant half
@@ -236,7 +243,11 @@ max_steps = 100_000_000       # 執行器步數上限，超過就 E-UNBOUNDED
 [expect]
 must_pass  = true             # G6 必須 unsat（見 §11 R6）
 hints_omit = "record"         # noAssume 模式只記錄結果，不作為關卡
+phase      = 4                # 哪個階段的驗收負責這個目標（省略時為 3）
 ```
+
+cut 的位置隨 variant 改變，cut 斷言也要跟著變：`spec.py` 的 `build()` 若接受 `variant` 參數，
+核心就把 variant 名稱傳進去（例如 Kyber `ntt` 的 `half`）。
 
 clang 與 opt 的旗標固定在核心裡（§5.3），target 不能改。這樣所有目標走的是同一條前端管線。
 
@@ -521,6 +532,17 @@ w 是寬度。「—」表示沒有這一項。
 
 L2 保留不用（原本是 mov，已由執行器的 copy propagation 取代）。
 
+**複製沿用 atom**（第 4 階段加入）：L8，以及 EXACT 或恆等的 L9，在代數層只說「⟦r⟧ = ⟦x⟧」。
+這種式子不再輸出：r 在該讀法下直接沿用 x 的 atom（`Encoder.alias`），代數層裡根本不出現 r。
+同一個值先被遮罩（L9m）、再在同一個位元位置位移（L7）時，位移結果沿用遮罩的高位 witness，
+不再另立一條拆分式與低位 witness；低位的 hint 候選改看遮罩的結果。沿用只是把等式代入消去，
+所以 sound 與否取決於那條恆等式本身：它們記在 `seg.alias_eqs`，A1.1 的引理把它們當目標證明、
+A1.2 照樣突變，A1.3 的 fuzz 與 G3 在真實執行上逐條求值。r 若在另一種讀法下被用到，L10 橋接
+照常產生，一端就是沿用的 atom。實測：Kyber `ntt` 一層的代數敘述 2817 → 1537 條，
+bin/main 164 秒 → 92 秒。副作用也要記下：`fiat_p256_cmovznz` 的 **omit** 模式（沒有 hint，要
+bin/main 自己從 range 段找出遮罩位元就是 arg1）從 0.25 秒變成 20 秒——兩個檔在邏輯上等價，差別在
+bin/main 的搜尋；emit 模式（關卡）不受影響。這是 `Options.copy_alias` 可以關掉的原因。
+
 每個 1-bit 符號都加上 `c·c = c`（CryptoLine 對 carry 的作法）。這條等式永遠為真，
 所以 sound，而且能幫 Gröbner 基底計算。
 
@@ -546,6 +568,25 @@ L2 保留不用（原本是 mov，已由執行器的 copy propagation 取代）�
 **判定**
 
 在該段的 range 模型上用 z3 證明 v = k（逐一證，每個候選有 timeout）。證得的候選就是 hint。
+
+**判定的實作**（第 4 階段加入，`vc/prover.py`）：Kyber `ntt` 一層有 128 個 butterfly，把整段
+range 模型連同每個候選送給 z3，光是 hint 就跑十分鐘以上；fiat `p256_mul` 更是在第一批候選就卡住。
+改成下面四件事之後，Kyber `ntt` 整個 build 6 秒：
+
+1. **樣本過濾**：先取 16 筆滿足前置條件的真實執行（一半取在各輸入區間的端點，進位與借位才會
+   發生），算出段內每個符號的值。某筆執行上就不成立的候選，不可能證得出來，不送 z3。
+   樣本只用來**丟掉**候選，z3 仍是唯一的判定者。
+2. **切片**：每個候選只帶它的 cone of influence：它提到的符號的定義（遞移地），以及碰到這些
+   符號的前提。少帶前提只會證不出來，不會證出假的；而 cone 以外的符號各自只被定義一次、
+   沒有其他限制，所以切片也不會漏掉任何需要的前提。
+3. **加深**：多數候選是局部的——Montgomery 那一步的低 limb 為 0，與乘數怎麼算出來無關——
+   但多 limb 乘法後段的值，完整 cone 裡有前面所有 64×64 乘積，z3 要全部 bit-blast。所以先在
+   截斷到 4、8、16 層的 cone 上試（更遠的符號留成自由變數，timeout 2 秒），失敗的才加深，最後
+   才用完整 cone（超過 400 條敘述就放棄，只損失一個 hint）。截斷的切片仍是模型的子集，證得就是
+   證得。實測 `lo64(x + lo64(x·(2⁶⁴−1))) = 0` 在 x 自由時 0.02 秒，帶上 x 的定義鏈則幾分鐘跑不完。
+4. **批次**：切片後的查詢以 `(reset)` 隔開、各自帶 timeout，分給數個 z3 行程平行跑。
+
+每個 hint 記下證得它的深度，range VC 拆分時（§7.4）用同一個切片重證。
 
 **兩種輸出模式**
 
@@ -643,8 +684,18 @@ golden 用了 `(PConst (bv2int v))`（違反 M5），宣告也沒有排序（違
 
 safety 義務一律寫成 QF_BV：運算元依有號性加寬（加減法加寬到 w+1，乘法加寬到 2w），在加寬後的寬度上比較上下界。
 
-檔案太大時，`--range-split=N` 會把義務拆成 N 個檔案。這樣做成立，是因為每個係數的界線義務
-彼此獨立。
+檔案太大時，`--range-split=N` 會把義務拆成 N 個檔案（target 可以在 `target.toml` 的
+`[build] range_split` 給預設值）。拆分後的格式（第 4 階段）：
+
+- 共用敘述的義務（cone 有交集）分在同一個檔，各檔依工作量平衡。
+- **每條義務自成一個查詢**，只帶它的 cone（§6.4 的切片），查詢之間以 `(reset)` 隔開。
+  G5 要求檔內每個查詢都回答 `unsat`，而且回答數等於 `(check-sat)` 數。
+- cone 很大（> 60 條敘述）的義務，assembler 先在截斷的 cone 上試證（同 §6.4），記下最淺的
+  成功深度並用那個切片輸出；都證不出來就用完整 cone，由 G5 判定。hint 用它自己被證得的深度。
+
+這樣做成立：每個查詢從段模型的一個子集證明它的義務，所以在整個模型上也成立；所有查詢合起來
+涵蓋全部義務，和一個檔案是同一個證明。逐條問不只是整齊：Kyber 一個 butterfly 的 12 條義務，
+合成一個否定合取要 16 秒，逐條各在 0.2 秒內；整層 128 個 butterfly 合成一個檔則超過 10 分鐘。
 
 ### 7.5 `manifest.json`
 
@@ -686,7 +737,7 @@ c2mix 採用以下語意，G3、G4 與 §8.2 都以它為準：
 | **G2** 前端保真 | 軌跡的語意等於 C 的語意 | 差分執行：用同一個 clang-18、同樣的 `-fwrapv`，把 harness 與 `runtime/c2mix_rt.c` 編成原生執行檔，和 c2mix IR interpreter 比對**每個 cut 的快照**與最終輸出。輸入：總輸入位元 ≤ 24 時窮舉，否則 10⁵ 筆亂數加邊界語料，**不受前置條件限制**。另外把原生版本以 `-O0` 和 `-O2` 各編一次，結果不同時報 `W-UB-SENSITIVE`（程式依賴 UB 或實作定義行為） | 解析器與執行器的錯 |
 | **G3** 軌跡一致 | 真實執行是每個 VC 前提的模型 | 對滿足前置條件的執行，算出每個 VC 所有符號的值（BV 值、alias、witness、h/l、ghost 多項式），逐條求值所有非目標斷言，全部必須為真。BV 與 Int 部分用 SMT-LIB 標準語意，Poly 部分用 §8.0 的語意；前提裡的 `eqmod` 判定方式與限制同 G4。自寫 evaluator；另抽 1% 用 z3 交叉驗證 BV 與 Int 部分（z3 無法判定 `eqP` 系列） | vacuity（前提矛盾）、有號性錯、規則錯 |
 | **G4** 規格成立 | 規格在真實執行上為真 | 在執行上逐一求值 pre ⇒（每個 cut 斷言、post）。整數 `eqmod` 用整除判定；(質數 q, 首一多項式 m) 的 `eqmod` 在 F_q[x] 上約簡後判定；模數是程式變數時代入具體值。其他形式回報 `unsupported-eval`，必須在 `target.toml` 註明豁免理由 | 規格寫錯 |
-| **G5** range 義務 | safety、界線、hint 都成立 | 每個 `cutN.range.smt2` 用 `z3` 求解，必須 `unsat` | 溢位、界線錯誤 |
+| **G5** range 義務 | safety、界線、hint 都成立 | 每個 `cutN.range.smt2`（拆分時是每個 `cutN.range.K.smt2`）用 `z3` 求解，檔內每個查詢都必須 `unsat`（§7.4） | 溢位、界線錯誤 |
 | **G6** 代數目標 | 每段的目標成立 | 每個 `cutN.smt2` 用 `bin/main` 求解，必須 `unsat`（flag 見 §10）。`sat` 只代表「沒證出來」，不是反例（F10），不能據此判定程式或規格有錯 | 程式或規格錯（也可能是求解器限制，見 R6） |
 | **G7** 突變 | 測試真的有鑑別力 | C 突變：常數 ±1、`+` 和 `−` 互換、運算元互換、刪除敘述、索引差一、常數表換錯項。規格突變：換錯 ζ、界線改緊。每個突變都必須被某個關卡擋下，擊殺率 100%；等價突變要在 `target.toml` 寫明理由 | 測試太弱 |
 | **G8** 決定性 | 可重現 | 跑兩次，輸出位元組完全相同 | 隱藏的非決定性 |
@@ -905,6 +956,17 @@ Dilithium `montgomery_reduce`/`reduce32`、fiat P-256 的四個原語，加上 A
 （`a <= 2^31 - 2^22 - 1`），下界放成 −2³¹ 就不成立——a = −2143289344 會得到
 r = −6283009，比同一段註解保證的界線多 1。改成對稱的 |a| ≤ 2³¹ − 2²² − 1 之後通過。
 
+追過呼叫點之後確認這個界線是**緊的**，而且不該換成呼叫點的界線（推導寫在
+`targets/dilithium_reduce32/params.py`）：上游那句上界其實是「`a + (1<<22)` 不溢位」的
+條件，不是幅度條件。窮舉 [−2³¹, 2³¹ − 2²² − 1] 全部輸入，失守的**只有** −(2³¹ − 2²²) 這一個
+（−2³¹ 本身反而成立，r = −2096896）；上端 2³¹ − 2²² − 1 恰好得到 r = 6283008。所以對稱界線
+是「包含 0、後置條件成立」的最大區間，兩端都一格放寬不得。實際的六個呼叫點（`ref/sign.c` 的
+`polyveck_reduce`/`polyvecl_reduce`）中，三個的輸入是 `polyvec_matrix_pointwise_montgomery`
+的輸出，幅度 < `L·Q` 或 `(L+1)·Q`（由 `montgomery_reduce` 的 |r| < Q 累加 L 次而來）：
+vendor 的 mode 2（L = 4）最多 5Q ≈ 2^25.3，距離界線 51 倍；mode 5（L = 7）的 8Q = 2²⁶ 也還有
+32 倍。另外三個的輸入由 `invntt_tomont` 的輸出算出，那是第 5 階段的 held-out 集合，界線不
+該在這裡查。
+
 ---
 
 ### 第 4 階段：規模（陣列、迴圈、cut）
@@ -943,6 +1005,62 @@ r = −6283009，比同一段註解保證的界線多 1。改成對稱的 |a| �
   （可以用 `--range-split`）。執行器的步數與耗時寫進報告。
 
 **出口**：以上全部通過。
+
+**實作進度（2026-09-24，尚未達到出口）**
+
+目標八個（`target.toml` 標 `phase = 4`）：`kyber_ntt`（另有 `half` variant）、`dilithium_ntt`、
+`fiat_p256_{mul,sub,opp,to_montgomery,from_montgomery}`、`fiat_25519_carry_mul`。zeta 表在
+`params.py` 依定義重算（ζ = 17、1753，bit-reversal，Montgomery 形式），與上游表逐項相同，但規格不讀
+上游的表。驗收腳本 `tests/phase4/accept.py`（`make accept-4`）。
+
+這個階段逼出的核心改動，都是通用規則（G10 乾淨）：
+
+1. **hint 判定的實作**（§6.4）：樣本過濾、cone 切片、逐步加深、批次；z3 用 `rlimit` 而不是
+   `timeout`——timeout 在 bit-blast 大乘法器時不會被檢查（實測「2 秒」的查詢跑了幾分鐘），而且會隨
+   機器負載變，G8 就不穩；rlimit 是決定性的。Kyber `ntt` 的 hint 從十分鐘以上變成數秒，兩次 build
+   的 VC 位元組相同。
+2. **range VC 拆分**（§7.4）：逐條義務、只帶 cone、以 `(reset)` 隔開；G5 要求每個回答都是 `unsat`。
+   Kyber 一層合成一個檔 z3 超過 10 分鐘，拆開後 128 個檔全部 `unsat`。G1 對 range 檔只做語法檢查
+   （拿掉 `check-sat` 再給 z3），不再重解一次。
+3. **複製沿用 atom、同位拆分共用**（§6.3）。
+4. **修正**：H2（全 1 的遮罩）在有號讀法下寫成 2ʷ − 1，實際是 −1——這條 hint 在 emit 模式會讓前提
+   矛盾、VC vacuous 地 `unsat`。G3 過去只檢查 hint 的 BV 形式，所以沒抓到；現在 G3 也求值 hint 的
+   代數形式與每條沿用恆等式。
+5. `spec.py` 的 `build(variant=…)`、`target.toml` 的 `range_split`、`phase`（§4.1）。
+
+目前結果（單次實測，機器與其他工作共用，時間只供參考）。第 0–3 階段的驗收在這些核心改動之後
+全部重跑通過（`reports/accept-{0,1,2,3}-2026-09-24.md`）。
+
+| 目標 | G5 | G6（emit） | 其他 |
+|---|---|---|---|
+| `kyber_ntt` | 128 檔全 `unsat` | 8/8 `unsat`，合計 246 s（沿用 atom 之前 484 s） | A4.2：七層模數集合與 golden 相等、界線 q…8q、conjunct 2…128；omit 模式 cut0 30 分鐘逾時（只記錄）；G8 位元組相同 |
+| `kyber_ntt` `half` | — | 14/14 `unsat`，合計 164 s（golden 同顆粒度 185.19 s，F6） | 顆粒度與 golden 相同：第 1 層一刀，之後每層每半一刀 |
+| `dilithium_ntt` | 一層 16 檔全 `unsat`（負載下 2253 s CPU） | 9/9 `unsat`，合計 907 s（最後一層、一次因式 279 s） | build 11 s，每層 128 個 H1 |
+| `fiat_p256_mul` | 見下 | 30 分鐘逾時（原形、消去複製、沿用 atom 三種都是） | hint 找到 Montgomery 的四個低 limb = 0；build 230–277 s |
+| `fiat_p256_sub`、`opp` | `unsat`（1.4 s、0.7 s） | `sub` 18 分鐘仍在搜尋（golden 不到 1 秒）；`opp` 3 s `sat`，G3、G4 通過，所以是沒證出來（F10） | A4.2 見下 |
+| `fiat_p256_to/from_montgomery` | 見下 | `to` 10 分鐘逾時；`from` 183 s `sat` | hint 判定原本 1183 s，常數樣本過濾後 150 s |
+| `fiat_25519_carry_mul` | 單檔 `unsat`（442 s） | 10 分鐘逾時 | build 20 s，不需要 hint |
+
+A4.2（P-256）：把兩邊的後置條件當成關係比較（在隨機 limb 值上求值，要求 golden = 單位 × c2mix，
+mod p）。`sub`、`sub_v2`、`neg`、`from_mont`、`mul_mont_1` 全部相符（單位 ±1）；`mul_mont_0` 的
+後置條件講的是中途暫存器（golden 在最後的條件減法前切了一刀），只比對述詞與模數。前置條件的範圍，
+除了 `to_mont` 都相同：golden 的 `to_mont` 沒有 A < p 的界，fiat 的前置條件有。
+
+**兩個卡住 fiat 目標、需要決定的問題**
+
+1. **G6：fiat 的 64 位元借位減法。** fiat 用 `signed __int128` 寫 `subborrowx`
+   （`x1 = (arg2 − (int128)arg1) − arg3`）。§5.1 的有號性依序取自「產生它的運算」，第一個運算元是
+   zext，所以這個減法被當成無號、判成 SPLIT，每個 limb 多出符號位橋接與 int1/uint1 轉換的 8 位元拆分；
+   CryptoLine 的 `sbbs` 一個 limb 只有一條式子。bin/main 在這個形狀上跑不出來：連只有 118 條 IR 的
+   `fiat_p256_sub` 都 18 分鐘沒結果，golden `sub` 不到 1 秒。bin/main 的 log 顯示 golden 走的是
+   「代換全部 assignment 之後 eqmodP1 直接為真」，我們的檔留下約 55 條非 assignment 的式子，落到
+   Z3 搜尋。可能的方向：有號性改用 debug info 的變數型別（§5.1 第 3 條目前排在運算之後），或對
+   「兩種讀法之一恰好 EXACT」的加減法選那個讀法。兩者都動 §5.1/§6.2，需要先決定。
+2. **G5：Montgomery 界。** `mul`、`to/from_montgomery` 的後置範圍 0 ≤ out < p 化約到最後條件減法前
+   的 T < 2p，這要跨整個 256×256 乘法做算術推理，QF_BV bit-blast 做不到，區間分析也推不出（是關係
+   性質）。同一件事在整數上很容易：z3 NIA 由恆等式 T·R = A·B + M·P 與輸入界 0.014 秒證出 T < 2p。
+   一個做法是加一種 VC：在整數模型（代數敘述 + atom 的型別界 + range 前提）上證 range 目標，safety
+   仍由 G5 在 BV 上證，避免循環。這會改 §8.2 的 soundness 論證，需要先決定。
 
 ---
 
@@ -997,7 +1115,7 @@ c2mix build <target> [--variant V] [-o out/]
             [--ghost=bind|inline|legacy-pow2]  預設 bind（legacy-pow2 只供 A/B）
             [--exactness=auto|split]       預設 auto
             [--carry=relevant|previous|all]    預設 relevant
-            [--range-split=N]              預設 1
+            [--range-split=N]              預設為 target 的 range_split，否則 1
 c2mix lint [--profile=strict|consumer] [--baseline FILE] FILES…
 c2mix roundtrip FILES…
 c2mix gate G<n> <target>
@@ -1011,7 +1129,7 @@ c2mix gate G<n> <target>
 c2mix/                        獨立 repo
   c2mix/                      Python 套件（核心，G10 檢查範圍）
     cli.py
-    frontend/{toolchain,llparse,exec,harness}.py
+    frontend/{toolchain,llparse,execute,harness}.py
     ir/{ops,interp,intervals}.py
     lower/{rules,idioms,encode}.py
     spec/{dsl,check}.py
@@ -1129,7 +1247,7 @@ sets = ["pqclean_kyber768_avx2_noAssume", "openssl/ecp_nistz256/x86_64"]
 | 全域 | `@name = [internal] constant/global T init`；`constant` 的讀取直接摺疊 |
 | 函式 | `define`（執行時 inline）、`declare`（只允許 runtime API 與白名單 intrinsic） |
 | 指令 | §5.4 的表 |
-| 指令旗標 | `nsw`、`nuw`、`exact` 一律拒絕（`E-POISON-FLAG`）；`inbounds` 忽略 |
+| 指令旗標 | `nsw`、`nuw`、`exact`、`nneg`、`disjoint` 等會產生 poison 的旗標一律拒絕（`E-POISON-FLAG`，§5.5）；`inbounds` 忽略 |
 | metadata | `!dbg`、`!DILocation`、`!DILocalVariable`、`!DIBasicType` 用於行號與型別；其他 metadata 忽略 |
 | 屬性 | 函式與參數屬性忽略（它們不影響本子集的語意） |
 

@@ -65,7 +65,7 @@ def main() -> int:
         args.g2_runs, args.runs, args.g3_runs, args.mutants = 2000, 50, 5, 4
     cfg = config.load()
     z3 = cfg.data["solver"]["range"]["bin"]
-    names = args.targets.split(",") if args.targets else targets.names()
+    names = args.targets.split(",") if args.targets else targets.names(phase=3)
     stamp = datetime.date.today().isoformat()
     rows, notes = [], []
     built, ll_paths = {}, {}

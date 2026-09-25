@@ -26,13 +26,14 @@ class LoweringError(Exception):
 
 def lower(prog: Program, analysis: iv.Analysis | None = None, mode: str = E.ALIAS,
           pre: dict | None = None, force_split: bool = False,
-          span: tuple[int, int] | None = None, enc: Encoder | None = None) -> Segment:
+          span: tuple[int, int] | None = None, enc: Encoder | None = None,
+          copy_alias: bool = False) -> Segment:
     """Lower a program, or with `span` just the instructions of one segment; values
     defined earlier are declared but not defined, which is what makes them the
     segment's inputs (§7.1)."""
     analysis = analysis or iv.analyze(prog, pre, force_split, span)
     defined = {v.name: v.signed for v in prog.values()}
-    enc = enc or Encoder(Segment(), mode, analysis.intervals, defined)
+    enc = enc or Encoder(Segment(), mode, analysis.intervals, defined, copy_alias=copy_alias)
     if not enc.intervals:
         enc.intervals = analysis.intervals
     enc.defined_signed = {**defined, **enc.defined_signed}
@@ -75,8 +76,8 @@ def _lower_instr(ins: Instr, idx: int, enc: Encoder, seg: Segment, an: iv.Analys
         kind = "sign_extend" if op == "sext" else "zero_extend"
         a = ins.args[0]
         seg.bv.append(["=", r.name, E.extend(kind, r.width - a.width, enc.bv(a))])
-        seg.alg.append(E.eqP(E.PConst(enc.atom(r)), E.PConst(enc.atom(a))))
         enc.declare(r)
+        _copy(enc, seg, r, r.signed, enc.atom(a))
         return note("L8")
     if op == "extract":                                                 # L9 / L9′ / L11
         return _lower_extract(ins, enc, seg, decision, note)
@@ -124,6 +125,15 @@ def _in_type(term, term_width: int, target: Value, read_signed: bool | None = No
                 ["bvsle", E.bv_const(target.lo, term_width), term],
                 ["bvsle", term, E.bv_const(target.hi, term_width)]]
     return ["bvule", term, E.bv_const(target.hi, term_width)]
+
+
+def _copy(enc: Encoder, seg: Segment, r: Value, signed: bool, atom) -> None:
+    """⟦r⟧ (read `signed`) = the integer `atom` stands for. With copy aliasing r simply
+    takes that atom (Encoder.alias); otherwise the equation is stated."""
+    if enc.copy_alias:
+        enc.alias(r, signed, atom)
+    else:
+        seg.alg.append(E.eqP(E.PConst(enc.read(r, signed)), E.PConst(atom)))
 
 
 def _split_eq(whole, parts, sum_first: bool = False):
@@ -209,6 +219,16 @@ def _lower_shr(ins, enc: Encoder, seg: Segment, note):                  # L7
     signed = ins.op == "ashr"
     seg.bv.append(["=", r.name, ["bvashr" if signed else "bvlshr", enc.bv(a), E.bv_const(k, a.width)]])
     enc.declare(r)
+    split = seg.split_at.get((a.name, k))
+    if enc.copy_alias and split is not None and a.signed == signed:
+        # a was already split at bit k by a mask (L9m): x = h·2^k + low. The shift is
+        # that same h (floor division, read the way the shift reads a), so it takes
+        # h's atom; the low part is the mask's result, which is where a hint about the
+        # low bits (the Montgomery "low half is zero") now looks.
+        high, low = split
+        enc.alias(r, signed, enc.atom(high, signed))
+        seg.shifted.append(a)
+        return note("L7", {"witness": low.name, "reuses": "L9m"})
     parts = [(enc.read(r, signed), k)]
     if k:
         low = enc.witness("l", k, False)
@@ -225,10 +245,10 @@ def _lower_extract(ins, enc: Encoder, seg: Segment, decision, note):
     seg.bv.append(["=", r.name, E.extract(hi, lo, enc.bv(x))])
     enc.declare(r)
     if lo == 0 and hi == W - 1:                                         # identity
-        seg.alg.append(E.eqP(E.PConst(enc.read(r, x.signed)), E.PConst(enc.read(x, x.signed))))
+        _copy(enc, seg, r, x.signed, enc.read(x, x.signed))
         return note("L9")
     if decision == iv.EXACT and lo == 0:                                # L9
-        seg.alg.append(E.eqP(E.PConst(enc.read(r, r.signed)), E.PConst(enc.read(x, r.signed))))
+        _copy(enc, seg, r, r.signed, enc.read(x, r.signed))
         seg.safety.append(_in_type(enc.bv(x), W, r))
         return note("L9")
     # L9′ / L11: x splits into (high, this field, low); the top field carries x's
@@ -265,6 +285,7 @@ def _lower_mask(ins, site, enc: Encoder, seg: Segment, note):           # L9m
     seg.alg.append(_split_eq(E.PConst(enc.read(x, x.signed)),
                              [(enc.atom(h), k), (enc.read(r, False), 0)]))
     _record_split(seg, x, r, k)
+    seg.split_at[(x.name, k)] = (h, r)
     seg.shifted.append(x)
     return note("L9m", {"witness": h.name})
 

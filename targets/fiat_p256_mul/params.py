@@ -1,0 +1,5 @@
+"""fiat-crypto P-256 constants (G10: only under targets/)."""
+W = 64                                    # machine word size
+LIMBS = 4
+R = 1 << (W * LIMBS)                      # the Montgomery factor, (2^64)^4
+P = 2**256 - 2**224 + 2**192 + 2**96 - 1  # the p256 prime

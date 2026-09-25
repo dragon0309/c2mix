@@ -29,6 +29,9 @@ class Options:
     hints: str = "omit"                  # omit | emit (§6.4)
     carry: str = "relevant"              # relevant | previous | all (§7.2)
     hint_timeout: float = 10.0
+    hint_samples: int = 16               # runs that filter hint candidates (0: none)
+    range_slices: bool = False           # choose a cone depth per range obligation (§7.4)
+    copy_alias: bool = True              # copies reuse the atom they copy (§6.3)
 
 
 @dataclass
@@ -45,6 +48,7 @@ class VC:
     goal_range: list = field(default_factory=list)
     ghost_bindings: list = field(default_factory=list)
     hints: list = field(default_factory=list)       # (symbol, value, poly term, bv term)
+    depths: dict = field(default_factory=dict)      # range obligation -> cone depth (§7.4)
     carried: list = field(default_factory=list)     # (from point, assertion text)
 
     @property
@@ -106,7 +110,7 @@ def assemble(trace: Trace, target: dsl.Target, opts: Options | None = None,
         analysis = iv.analyze(trace.prog, pre_iv if p_from == ENTRY_POINT else None,
                               force_split=opts.exactness == "split", span=span,
                               known=pre_iv)
-        enc = Encoder(Segment(), opts.int_encoding)
+        enc = Encoder(Segment(), opts.int_encoding, copy_alias=opts.copy_alias)
         seg = rules.lower(trace.prog, analysis, span=span, enc=enc)
         vc = VC(i, p_from, p_to, span, seg, enc)
 
@@ -142,9 +146,32 @@ def assemble(trace: Trace, target: dsl.Target, opts: Options | None = None,
 
     if opts.hints != "off":
         from . import hints as hints_mod
+        runs = hints_mod.sample_runs(trace, target, opts.hint_samples)
         for vc in out:
-            vc.hints = hints_mod.discover(vc, z3_bin or "z3", opts.hint_timeout)
+            vc.hints = hints_mod.discover(vc, z3_bin or "z3", opts.hint_timeout,
+                                          samples=hints_mod.sample_envs(vc, runs))
+    if opts.range_slices:
+        for vc in out:
+            vc.depths = obligation_depths(vc, z3_bin or "z3", opts.hint_timeout)
     return out
+
+
+SMALL_CONE = 60     # statements; an obligation this local keeps its whole cone
+
+
+def obligation_depths(vc: VC, z3_bin: str, timeout: float) -> dict:
+    """For a split range VC: the shallowest cone on which z3 proves each obligation
+    whose whole cone is large (vc/prover.py). A shallower slice is a subset of the
+    model, so G5 proving the obligation there proves it; an obligation no slice
+    proves keeps its full cone and G5 decides it as before. Hints bring their own."""
+    from ..mixfmt.writer import to_str
+    from . import prover
+    model = prover.RangeModel(vc.seg, vc.premise_range)
+    goals = [g for g in list(vc.goal_range) + list(vc.seg.safety)
+             if len(model.cone(g)[1]) > SMALL_CONE]
+    prover.prove_all(model, goals, z3_bin, timeout, depths=prover.DEPTHS[:-1])
+    return {to_str(g): model.depth_of[to_str(g)] for g in goals
+            if to_str(g) in model.depth_of}
 
 
 def _ghosts_used(assertions) -> list[str]:

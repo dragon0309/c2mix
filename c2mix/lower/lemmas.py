@@ -196,7 +196,11 @@ def _lemma(name, rule, build, decision=None, pre=None) -> Lemma:
     b = Builder()
     prog = build(b)
     an = forced(prog, decision, pre) if decision else iv.analyze(prog, pre)
-    seg = rules.lower(prog, an)
+    enc = Encoder(Segment(), intervals=an.intervals, copy_alias=True)
+    seg = rules.lower(prog, an, enc=enc)
+    # a copy's identity is not stated in a VC — the copy takes the atom it copies — but
+    # it is exactly what the lemma has to prove, so it joins the goals here
+    seg.alg += enc.alias_statements()
     L = render(seg, name, rule)
     L.inputs = frozenset(v.name for v in prog.inputs)
     return L
@@ -269,6 +273,15 @@ def generate(widths=LEMMA_WIDTHS) -> list[Lemma]:
                     b.and_(a, m)
                     return b.build()
                 out.append(_lemma(f"L9m.{tag}", "L9m", bmask))
+
+                def bsplit(b, width=w, half=half, sign=signed):
+                    """A mask and a shift at the same bit: the shift reuses the mask's
+                    split (its result is the mask's high witness)."""
+                    a = b.input("a", width, sign)
+                    b.and_(a, b.const((1 << half) - 1, width, sign))
+                    b.ashr(a, half) if sign else b.lshr(a, half)
+                    return b.build()
+                out.append(_lemma(f"L7d.{tag}", "L7", bsplit))
 
             def bnot(b, width=w, sign=signed):
                 b.not_(b.input("a", width, sign))

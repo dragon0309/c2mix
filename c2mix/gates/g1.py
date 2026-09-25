@@ -42,7 +42,9 @@ def is_range_file(path: Path) -> bool:
 
 def check_range(path: Path, z3_bin: str = "z3") -> list[str]:
     """§7.4: `(set-logic QF_BV)`, declarations, premises, one negated goal, check-sat —
-    and z3 has to be able to parse it."""
+    and z3 has to be able to parse it. A split file (emit/range.py) repeats that shape
+    once per obligation, separated by `(reset)`. z3 is only asked to parse: the
+    `(check-sat)` lines are left out, so this does not solve what G5 solves."""
     text = path.read_text(encoding="utf-8")
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     bad = []
@@ -54,7 +56,9 @@ def check_range(path: Path, z3_bin: str = "z3") -> list[str]:
         bad.append(f"{path.name}: E-RANGE-GOAL no negated goal")
     if "Poly" in text or "eqP" in text:
         bad.append(f"{path.name}: E-RANGE-THEORY a range VC is pure QF_BV")
-    p = subprocess.run([z3_bin, "-smt2", str(path)], capture_output=True, text=True)
+    parse_only = "\n".join(l for l in text.splitlines() if l.strip() != "(check-sat)")
+    p = subprocess.run([z3_bin, "-in", "-smt2"], input=parse_only, capture_output=True,
+                       text=True)
     if "(error" in p.stdout + p.stderr:
         first = next(l for l in (p.stdout + p.stderr).splitlines() if "(error" in l)
         bad.append(f"{path.name}: E-RANGE-PARSE z3: {first[:120]}")

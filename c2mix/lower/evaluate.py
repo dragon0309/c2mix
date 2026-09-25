@@ -238,4 +238,10 @@ def check_segment(seg: Segment, env: Env) -> list[str]:
                 bad.append(f"{kind}: not a formula: {to_str(st)[:120]}")
             elif not got[1]:
                 bad.append(f"{kind}: false on this run: {to_str(st)[:160]}")
+    for v, signed, target in seg.alias_eqs:     # a copy shares the atom it copies (§6.3)
+        own = interpret(env.bv[v.name], v.width, signed)
+        got = eval_term(target, env)
+        if got[0] != "int" or got[1] != own:
+            bad.append(f"copy alias: {v.name} read {'signed' if signed else 'unsigned'} is "
+                       f"{own}, its atom {to_str(target)[:60]} is {got}")
     return bad

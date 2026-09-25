@@ -10,6 +10,7 @@ for the wrong reason, and no real run could satisfy it.
 """
 from __future__ import annotations
 
+from ..ir.interp import interpret
 from ..ir.trace import Trace
 from ..lower import evaluate
 from ..spec import dsl
@@ -40,6 +41,7 @@ def check(vcs: list[VC], trace: Trace, target: dsl.Target, patterns: dict[str, i
                                  ("algebraic premise", vc.premise_alg),
                                  ("ghost binding", vc.ghost_bindings),
                                  ("hint", [h.bv_term() for h in vc.hints]),
+                                 ("hint (algebraic form)", [h.poly_term(vc.enc) for h in vc.hints]),
                                  ("goal", vc.goal_alg + vc.goal_range)):
             for st in statements:
                 got = evaluate.eval_term(st, env)
@@ -47,6 +49,13 @@ def check(vcs: list[VC], trace: Trace, target: dsl.Target, patterns: dict[str, i
                     bad.append(f"cut{vc.index} {kind}: not a formula: {to_str(st)[:100]}")
                 elif not got[1]:
                     bad.append(f"cut{vc.index} {kind} false on this run: {to_str(st)[:160]}")
+        for v, signed, atom in vc.seg.alias_eqs:         # copies share an atom (§6.3)
+            own = interpret(env.bv[v.name], v.width, signed) if v.name in env.bv else None
+            got = evaluate.eval_term(atom, env)
+            if own is None or got[0] != "int" or got[1] != own:
+                bad.append(f"cut{vc.index} copy alias false on this run: {v.name} "
+                           f"({'signed' if signed else 'unsigned'}) = {own}, its atom "
+                           f"{to_str(atom)[:60]} = {got[1] if got[0] == 'int' else got}")
     return bad
 
 

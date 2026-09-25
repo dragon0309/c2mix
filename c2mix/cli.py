@@ -156,7 +156,7 @@ def cmd_build(args) -> int:
     opts = Options(int_encoding=args.int_encoding, ghost=args.ghost,
                    exactness=args.exactness, hints=args.hints, carry=args.carry)
     build = pipeline.build(fe.trace, fe.spec, out, args.target, opts, cfg,
-                           range_split=args.range_split,
+                           range_split=args.range_split or t.range_split,
                            spec_source=str(t.path / "spec.py"))
     print(f"{args.target}: {len(build.vcs)} cut(s), {fe.stats['instructions']} IR instructions, "
           f"{fe.stats['steps']} steps, {fe.stats['merges']} merge(s)")
@@ -261,7 +261,8 @@ def main(argv=None) -> int:
     p.add_argument("--ghost", choices=("bind", "inline", "legacy-pow2"), default="bind")
     p.add_argument("--exactness", choices=("auto", "split"), default="auto")
     p.add_argument("--carry", choices=("relevant", "previous", "all"), default="relevant")
-    p.add_argument("--range-split", type=int, default=1)
+    p.add_argument("--range-split", type=int, default=None,
+                   help="files per range VC (default: the target's, else 1)")
     p.set_defaults(fn=cmd_build)
 
     p = sub.add_parser("gate", help="run one gate on a target (§10.1)")

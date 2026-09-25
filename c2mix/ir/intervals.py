@@ -101,8 +101,9 @@ def analyze(prog: Program, pre: dict[str, Interval] | None = None,
             v = ins.result
             iv[v.name] = (known or {}).get(v.name, full(v))
     decisions: dict[int, str] = {}
+    widths = {ins.result.name: ins.result.width for ins in prog.instrs if ins.op == "const"}
     masks: set[str] = {n for n, c in consts.items()
-                       if c == 0 or c == -1 or _all_ones(n, c, prog)}
+                       if c == 0 or c == -1 or _all_ones(c, widths[n])}
     for idx, ins in enumerate(prog.instrs[lo:hi], start=lo):
         if ins.op == "marker":
             continue
@@ -124,11 +125,8 @@ def analyze(prog: Program, pre: dict[str, Interval] | None = None,
     return Analysis(iv, decisions, consts, masks)
 
 
-def _all_ones(name: str, value: int, prog: Program) -> bool:
-    for ins in prog.instrs:
-        if ins.op == "const" and ins.result.name == name:
-            return value & ((1 << ins.result.width) - 1) == (1 << ins.result.width) - 1
-    return False
+def _all_ones(value: int, width: int) -> bool:
+    return value & ((1 << width) - 1) == (1 << width) - 1
 
 
 def _is_mask(ins: Instr, iv: dict, masks: set) -> bool:

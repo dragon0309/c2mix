@@ -23,6 +23,7 @@ from c2mix.ir import intervals as iv          # noqa: E402
 from c2mix.ir import interp                   # noqa: E402
 from c2mix.ir.ops import Builder, Value       # noqa: E402
 from c2mix.lower import evaluate, rules       # noqa: E402
+from c2mix.vc.assemble import Options         # noqa: E402
 
 WIDTHS = (4, 8, 16, 32, 64)
 
@@ -140,7 +141,7 @@ def run_case(case: Case, rng: random.Random, n_inputs: int, mode: str = "alias")
     """Returns a list of failures ('' when the case is clean)."""
     prog = case.prog
     an = iv.analyze(prog, case.pre)
-    seg = rules.lower(prog, an, mode=mode)
+    seg = rules.lower(prog, an, mode=mode, copy_alias=Options().copy_alias)
     widths = evaluate.widths_of(seg)
     failures = []
     for _ in range(n_inputs):

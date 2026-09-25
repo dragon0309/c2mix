@@ -97,6 +97,8 @@ class Segment:
     splits: list = field(default_factory=list)               # SPLIT narrowings, for H5
     shifted: list = field(default_factory=list)              # values taken apart, for H6
     values: dict = field(default_factory=dict)               # name -> Value, for H6
+    alias_eqs: list = field(default_factory=list)            # (value, reading, atom): copies
+    split_at: dict = field(default_factory=dict)             # (value, k) -> L9m (high, low)
 
     def declare(self, name: str, sort) -> None:
         if name in self.decls and self.decls[name] != sort:
@@ -106,7 +108,7 @@ class Segment:
 
 class Encoder:
     def __init__(self, segment: Segment, mode: str = ALIAS, intervals: dict | None = None,
-                 defined_signed: dict | None = None):
+                 defined_signed: dict | None = None, copy_alias: bool = False):
         if mode not in (ALIAS, BV2INT):
             raise ValueError(mode)
         self.seg = segment
@@ -121,6 +123,11 @@ class Encoder:
         self._readings: dict[str, set] = {}
         self._aliased: set[str] = set()
         self._witnesses = 0
+        # Copies (L8, EXACT L9) reuse the atom of what they copy instead of getting
+        # their own and an equation saying the two are equal (§6.3): (name, reading)
+        # -> that atom. Half of an NTT layer's algebraic statements were such copies.
+        self.copy_alias = copy_alias
+        self._alias: dict[tuple[str, bool], object] = {}
 
     # ------------------------------------------------------------ symbols
     def declare(self, v: Value) -> None:
@@ -155,6 +162,8 @@ class Encoder:
         out would silently split the value in two as far as the algebraic model is
         concerned, and the proof would be missing a step it looks like it has."""
         signed = v.signed if signed is None else signed
+        if (v.name, signed) in self._alias:
+            return self._alias[(v.name, signed)]
         if v.name in self.consts:
             pattern = self.consts[v.name] & ((1 << v.width) - 1)
             return int_const(interpret(pattern, v.width, signed))
@@ -175,6 +184,29 @@ class Encoder:
             self.seg.bv.append(["=", name, self._twos_complement(v)])
         return name
 
+    def alias(self, v: Value, signed: bool, target) -> None:
+        """⟦v⟧ read `signed` is the integer the atom `target` already stands for: from
+        now on that atom is v's too, and no equation is emitted. The identity is kept in
+        seg.alias_eqs, where the rule lemmas (A1.1) and G3 check it like any statement."""
+        self._alias[(v.name, signed)] = target
+        self.seg.alias_eqs.append((v, signed, target))
+        self._note_reading(v, signed)
+
+    def alias_statements(self) -> list:
+        """The identities the aliases stand for, as algebraic statements — for the rule
+        lemmas, which have to prove them; a VC never states them."""
+        return [eqP(PConst(self._atom_term(v, signed)), PConst(target))
+                for v, signed, target in self.seg.alias_eqs]
+
+    def _resolved(self, v: Value, signed: bool):
+        return self._alias.get((v.name, signed)) or self._atom_term(v, signed)
+
+    def atom_of(self, name: str, width: int, signed: bool = False):
+        """An atom for a symbol known only by name (hints): its alias if it has one."""
+        if (name, signed) in self._alias:
+            return self._alias[(name, signed)]
+        return ["bv2nat", name] if not signed else f"s__{name}"
+
     def _note_reading(self, v: Value, signed: bool) -> None:
         seen = self._readings.setdefault(v.name, set())
         seen.add(signed)
@@ -192,7 +224,7 @@ class Encoder:
         if v.name in self._bridged:
             return
         self._bridged.add(v.name)
-        u, s = self._atom_term(v, False), self._atom_term(v, True)
+        u, s = self._resolved(v, False), self._resolved(v, True)
         bit = self._known_sign_bit(v)
         self.seg.bridge_alg.add(len(self.seg.alg))
         if bit is None:

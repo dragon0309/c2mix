@@ -1,0 +1,27 @@
+[source]
+url    = "https://github.com/pq-crystals/kyber"
+commit = "3edd5af5991927164edd4aacebfcbee00b8064e7"
+vendor = "kyber"
+files  = ["ntt.c", "reduce.c"]
+entry  = "ntt"
+
+[build]
+mode = "include"
+# Each butterfly's range obligations are independent of every other's; one file
+# per layer makes z3 bit-blast all 128 at once and time out (§7.4, A4.6).
+range_split = 16
+# ntt.c also defines invntt and basemul; they are never called, and no specification
+# for them exists before phase 5 (the held-out set).
+
+[variants]
+# One cut per half layer, the granularity of the golden
+# pqclean_kyber768_avx2_noAssume (§9 phase 4): for a fair performance comparison.
+half = "cuts.half.patch"
+
+[limits]
+max_steps = 10000000
+
+[expect]
+phase      = 4
+must_pass  = true
+hints_omit = "record"
